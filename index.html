@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <title>Retra · Roket</title>
+    <meta name="description" content="Canlı roket: herkes aynı turda, oran yükselirken zamanında çekil." />
+    <meta name="theme-color" content="#060414" />
+    <link rel="icon" type="image/png" href="./assets/roket.png" />
+    <link rel="apple-touch-icon" href="./assets/roket.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./style.css" />
+    <script type="importmap">
+      { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js" } }
+    </script>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <!-- Üst şerit -->
+      <header class="top">
+        <div class="balance" title="Kristal bakiyen">
+          <img src="./assets/kristal.png" alt="" />
+          <b id="balance">0</b>
+          <span class="gain" id="gain" hidden></span>
+        </div>
+        <div class="round-tag" id="round-tag">Tur #—</div>
+        <div class="tools">
+          <button class="icon-btn" id="btn-sound" aria-label="Ses">🔊</button>
+          <button class="icon-btn" id="btn-help" aria-label="Nasıl oynanır">?</button>
+        </div>
+      </header>
+
+      <!-- Son sonuçlar -->
+      <div class="hist-row">
+        <div class="history" id="history"></div>
+        <button class="hist-more" id="hist-more" aria-label="Son 40 tur">⋯</button>
+      </div>
+
+      <!-- 3D sahne -->
+      <section class="stage" id="stage">
+        <canvas id="scene" aria-label="Roket sahnesi"></canvas>
+        <canvas id="graph" aria-hidden="true"></canvas>
+        <div class="flash" id="flash"></div>
+
+        <div class="hud">
+          <div class="phase-chip" id="phase-chip">Bahisler açık</div>
+          <div class="mult" id="mult"><span id="mult-v">1.00</span><i>x</i></div>
+          <div class="sub" id="sub"></div>
+          <div class="countdown" id="countdown" hidden>
+            <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="cd-track" /><circle cx="22" cy="22" r="19" class="cd-bar" id="cd-bar" /></svg>
+            <b id="cd-num">15</b>
+          </div>
+        </div>
+
+        <div class="stage-stats">
+          <span>👥 <b id="st-players">0</b></span>
+          <span>💎 <b id="st-pot">0</b></span>
+          <span>🏆 <b id="st-winners">0</b></span>
+        </div>
+        <div class="feed" id="feed"></div>
+      </section>
+
+      <!-- Bahis paneli -->
+      <section class="panel">
+        <div class="bet-row">
+          <div class="amount">
+            <button class="step" id="amt-minus" aria-label="Azalt">−</button>
+            <div class="amt-box">
+              <small>Bahis</small>
+              <b id="amt">100</b>
+            </div>
+            <button class="step" id="amt-plus" aria-label="Artır">+</button>
+          </div>
+          <button class="main-btn" id="main-btn">
+            <span class="mb-top" id="mb-top">BAHİS YAP</span>
+            <span class="mb-sub" id="mb-sub">100 💎</span>
+          </button>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="auto-row">
+          <label class="switch">
+            <input type="checkbox" id="auto-on" />
+            <span class="knob"></span>
+            <em>Otomatik çekil</em>
+          </label>
+          <div class="auto-val">
+            <button class="mini" id="auto-minus">−</button>
+            <b id="auto-v">2.00x</b>
+            <button class="mini" id="auto-plus">+</button>
+          </div>
+          <div class="my-bet" id="my-bet" hidden></div>
+        </div>
+      </section>
+
+      <!-- Canlı oyuncular -->
+      <section class="players">
+        <div class="pl-head">
+          <b>Canlı oyuncular</b>
+          <span id="pl-count">0 oyuncu</span>
+        </div>
+        <div class="pl-list" id="pl-list"></div>
+      </section>
+
+      <div class="toast" id="toast" hidden></div>
+
+      <!-- Son 40 tur -->
+      <div class="sheet-back" id="sheet-back" hidden></div>
+      <div class="modal" id="hist-modal" hidden>
+        <div class="sheet-head"><b>📈 Son 40 tur</b><button class="x" data-close>✕</button></div>
+        <div class="hist-stats" id="hist-stats"></div>
+        <div class="hist-grid" id="hist-grid"></div>
+      </div>
+      <div class="modal" id="help-modal" hidden>
+        <div class="sheet-head"><b>Nasıl oynanır?</b><button class="x" data-close>✕</button></div>
+        <div class="help">
+          <p>Herkes <b>aynı turda</b> oynar. Her tur önce <b>bahis süresi</b> açılır; süre bitince roket kalkar ve oran <b>1.00x</b>'ten yükselmeye başlar.</p>
+          <p>Roket patlamadan önce <b>ÇEKİL</b>'e basarsan bahsin o anki oranla çarpılır ve kazancın hemen hesabına geçer. Roket patlarsa çekilmeyen bahisler kaybeder.</p>
+          <p><b>Otomatik çekil</b> açıkken oran seçtiğin değere ulaşınca senin yerine çekilme isteği gönderilir. İnternet gecikmesi olursa çekilme biraz sonraki oranda gerçekleşebilir ya da roket o arada patlayabilir.</p>
+          <p>Roket uçarken bahis yaparsan bahsin <b>sonraki tura</b> sıraya alınır; bahis süresi açılınca otomatik konur. İstersen iptal edebilirsin.</p>
+          <p>Bahis en az 10, en fazla 100.000 kristal. Aynı turda tekrar bahis yaparsan bahsine eklenir.</p>
+        </div>
+      </div>
+
+      <!-- Giriş (yalnız tarayıcıda; uygulamada hiç çıkmaz) -->
+      <div class="gate" id="gate" hidden>
+        <div class="gate-card">
+          <img class="gate-logo" src="./assets/roket.png" alt="" />
+          <b class="gate-title">Retra Roket</b>
+          <p class="gate-text" id="gate-text">Uygulamadaki hesabınla giriş yap.</p>
+          <form id="login">
+            <input id="email" type="email" placeholder="E-posta" autocomplete="username" required />
+            <input id="password" type="password" placeholder="Şifre" autocomplete="current-password" required />
+            <button class="go" type="submit">Giriş yap</button>
+          </form>
+          <button class="go" id="retry" hidden>Tekrar dene</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
