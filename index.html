@@ -54,6 +54,17 @@
           </div>
         </div>
 
+        <!-- Odak kipi (son 3 sn + uçuş): üstte bu turdaki oyuncular -->
+        <div class="focus-top" id="focus-top"></div>
+        <!-- Odak kipi: altta modern ÇEKİL + miktar / sonuç -->
+        <div class="focus-bar" id="focus-bar">
+          <button class="fb-cash" id="fb-cash" hidden>
+            <span class="fb-label" id="fb-label">ÇEKİL</span>
+            <span class="fb-amt"><img src="./assets/kristal.png" alt="" /><b id="fb-amt">0</b></span>
+          </button>
+          <div class="fb-info" id="fb-info"></div>
+        </div>
+
         <div class="stage-stats">
           <span>👥 <b id="st-players">0</b></span>
           <span>💎 <b id="st-pot">0</b></span>
@@ -83,7 +94,7 @@
           <label class="switch">
             <input type="checkbox" id="auto-on" />
             <span class="knob"></span>
-            <em>Otomatik çekil</em>
+            <em>Oto çekil</em>
           </label>
           <div class="auto-val">
             <button class="mini" id="auto-minus">−</button>
@@ -119,7 +130,7 @@
           <p>Roket patlamadan önce <b>ÇEKİL</b>'e basarsan bahsin o anki oranla çarpılır ve kazancın hemen hesabına geçer. Roket patlarsa çekilmeyen bahisler kaybeder.</p>
           <p><b>Otomatik çekil</b> açıkken oran seçtiğin değere ulaşınca senin yerine çekilme isteği gönderilir. İnternet gecikmesi olursa çekilme biraz sonraki oranda gerçekleşebilir ya da roket o arada patlayabilir.</p>
           <p>Roket uçarken bahis yaparsan bahsin <b>sonraki tura</b> sıraya alınır; bahis süresi açılınca otomatik konur. İstersen iptal edebilirsin.</p>
-          <p>Bahis en az 10, en fazla 100.000 kristal. Aynı turda tekrar bahis yaparsan bahsine eklenir.</p>
+          <p>Bahis en az 10, en fazla 1.000.000 kristal. Aynı turda tekrar bahis yaparsan bahsine eklenir. Kalkışa <b>son 3 saniye</b> kala bahisler kapanır ve roket tam ekrana geçer.</p>
         </div>
       </div>
 

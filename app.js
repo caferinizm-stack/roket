@@ -15,8 +15,12 @@ const SUPABASE = {
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 
 const MIN_BET = 10;
-const MAX_BET = 100000;
-const CHIPS = [10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000];
+const MAX_BET = 1000000;
+const CHIPS = [10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000];
+/** Kalkışa bu kadar saniye kala bahisler kapanır ve sahne tam ekrana geçer. */
+const LOCK_SECONDS = 3;
+/** Patlamadan sonra sonucun tam ekranda kalma süresi (ms). */
+const CRASH_HOLD_MS = 1900;
 
 const params = new URLSearchParams(location.search);
 const APP_MODE = params.get('app') === '1';
@@ -44,7 +48,8 @@ function notifyApp(msg) {
 const ERRORS = [
   ['Yetersiz kristal', 'Kristal bakiyen yetersiz.'],
   ['En az 10', 'En az 10 kristal oynamalısın.'],
-  ['en fazla 100000', 'Bahis en fazla 100.000 kristal.'],
+  ['en fazla 1000000', 'Bahis en fazla 1.000.000 kristal.'],
+  ['Bahisler kapandi', 'Bahisler kapandı, roket kalkıyor · bahsin sonraki tura alındı.'],
   ['havalandi', 'Roket havalandı, bahsin sonraki tura alındı.'],
   ['patladi, cekilme', 'Çok geç! Roket patladı.'],
   ['patladi', 'Roket patladı, sonraki turu bekle.'],
@@ -274,6 +279,7 @@ class DemoEngine {
   async bet(amount) {
     const now = this.#tick();
     if (now >= this.betEnds) throw new Error(now < this.crashAt ? 'Roket havalandi' : 'Roket patladi');
+    if (this.betEnds - now <= LOCK_SECONDS * 1000) throw new Error('Bahisler kapandi');
     if (amount > this.balance) throw new Error('Yetersiz kristal');
     this.balance -= amount;
     this.my = this.my ? { ...this.my, amount: this.my.amount + amount } : { amount, cashout: null, payout: 0 };
@@ -373,6 +379,8 @@ class Game {
     this.lastTick = 99;
     this.histShown = '';
     this.ready = false;
+    this.focus = false;         // odak kipi (son 3 sn + uçuş + patlama anı)
+    this.crashAtLocal = 0;
     this.scene = null;
     this.graph = new Graph($('graph'));
     this.#restore();
@@ -381,6 +389,10 @@ class Game {
     this.#renderAmount();
     requestAnimationFrame(this.loop);
     window.addEventListener('resize', () => { this.scene?.resize(); this.graph.resize(); });
+    // Sahne büyüyüp küçülürken (odak kipi) tuval her karede doğru ölçüde kalsın.
+    try {
+      new ResizeObserver(() => { this.scene?.resize(); this.graph.resize(); }).observe($('stage'));
+    } catch { /* eski tarayıcı */ }
   }
 
   async init3d() {
@@ -425,6 +437,7 @@ class Game {
     $('amt-minus').onclick = () => this.#step(-1);
     $('amt-plus').onclick = () => this.#step(1);
     $('main-btn').onclick = () => this.#main();
+    $('fb-cash').onclick = () => { Sound.unlock(); this.cashout(); };
     $('auto-on').onchange = (e) => { this.auto = e.target.checked; this.#save(); };
     const autoStep = (d) => {
       const a = this.autoAt;
@@ -467,7 +480,7 @@ class Game {
     };
     mk('½', 'op', () => this.#setAmount(this.amount / 2));
     mk('×2', 'op', () => this.#setAmount(this.amount * 2));
-    for (const c of CHIPS) mk(short(c), c === this.amount ? 'sel' : '', () => this.#setAmount(c));
+    for (const c of CHIPS) mk(short(c), `${c === this.amount ? 'sel' : ''}${c >= 500000 ? ' big' : ''}`, () => this.#setAmount(c));
   }
 
   toast(text, err = false) {
@@ -492,6 +505,10 @@ class Game {
   }
   get flightT() { return this.flightStart ? Math.max(0, (this.now - this.flightStart) / 1000) : 0; }
   get inFlight() { return this.s && this.s.my_bet > 0 && this.s.my_cashout == null; }
+  /** Bahis aşamasında kalan saniye. */
+  get betLeft() { return Math.max(0, (this.betEndsLocal - this.now) / 1000); }
+  /** Son 3 saniye: bahisler kapalı. */
+  get betLocked() { return this.phase === 'betting' && this.betEndsLocal > 0 && this.betLeft <= LOCK_SECONDS; }
 
   // ── Yoklama ──
   async poll() {
@@ -565,6 +582,7 @@ class Game {
   }
 
   #onBetting() {
+    this.lockShown = false;
     this.flightStart = 0;
     this.lastTick = 99;
     this.scene?.reset();
@@ -586,6 +604,7 @@ class Game {
   }
   #onCrash(prev) {
     const s = this.s;
+    this.crashAtLocal = Date.now();
     Sound.stopEngine();
     if (this.ready) {
       this.scene?.explode();
@@ -627,7 +646,7 @@ class Game {
     const s = this.s;
     if (!s || this.busy) return;
     if (this.phase === 'flying' && this.inFlight) return this.cashout();
-    if (this.phase === 'betting') return this.#bet(this.amount);
+    if (this.phase === 'betting' && !this.betLocked) return this.#bet(this.amount);
     // Uçuşta / patlamada: sonraki tura sıra
     if (this.queued) { this.queued = 0; this.toast('Sıradaki bahis iptal edildi'); }
     else { this.queued = this.amount; this.toast(`${fmt(this.amount)} 💎 sonraki tura sıraya alındı`); }
@@ -649,7 +668,7 @@ class Game {
       this.poll();
     } catch (e) {
       const t = errorText(e);
-      if (/havalandi|patladi/.test(`${e?.message}`)) { this.queued = amount; }
+      if (/havalandi|patladi|Bahisler kapandi/.test(`${e?.message}`)) { this.queued = amount; }
       if (/Yetersiz/.test(`${e?.message}`)) notifyApp('lowbalance');
       this.toast(t, true);
     } finally {
@@ -695,7 +714,13 @@ class Game {
       sub.textContent = `${fmt(s.my_bet * this.liveMult)} 💎`;
       return;
     }
-    if (this.phase === 'betting') {
+    if (this.phase === 'betting' && this.betLocked && !this.queued) {
+      btn.className = 'main-btn queue';
+      top.textContent = 'BAHİSLER KAPANDI';
+      sub.textContent = `${fmt(this.amount)} 💎 · sonraki tura al`;
+      return;
+    }
+    if (this.phase === 'betting' && !this.betLocked) {
       btn.className = 'main-btn';
       top.textContent = this.busy ? 'GÖNDERİLİYOR…' : s.my_bet > 0 ? 'BAHİS EKLE' : 'BAHİS YAP';
       sub.textContent = `${fmt(this.amount)} 💎`;
@@ -783,6 +808,7 @@ class Game {
       this.prevBets.set(k2, b.cashout ?? null);
       void key;
     });
+    this.#renderFocusTop(s, bets);
     const box = $('pl-list');
     if (!bets.length) {
       box.innerHTML = `<div class="pl-empty">${s.phase === 'betting' ? 'Henüz bahis yok · ilk sen ol!' : 'Bu turda oyuncu yok'}</div>`;
@@ -796,6 +822,57 @@ class Game {
         : crashed ? '<span style="color:#ff8a9c">💥</span>' : '<span class="dash">—</span>';
       return `<div class="${cls}">${this.#avatar(b)}<span class="nm">${esc(b.me ? `${b.name} (sen)` : b.name)}</span><span class="bt">${short(b.amount)} 💎</span><span class="rs">${rs}</span></div>`;
     }).join('');
+  }
+
+  /** Odak kipinde üstteki oyuncu şeridi (popup): bu turda kim var. */
+  #renderFocusTop(s, bets) {
+    const crashed = s.phase === 'crashed';
+    const list = bets.slice(0, 10);
+    const more = bets.length - list.length;
+    $('focus-top').innerHTML = list.map((b) => {
+      const won = b.cashout != null;
+      const cls = `ft${b.me ? ' me' : ''}${won ? ' won' : crashed ? ' lost' : ''}`;
+      const val = won ? `${fx(b.cashout)} +${short(b.payout)}` : short(b.amount);
+      return `<span class="${cls}">${this.#avatar(b)}<span>${esc(b.me ? 'Sen' : b.name)}</span><b>${val}</b></span>`;
+    }).join('') + (more > 0 ? `<span class="ft more">+${more}</span>` : '');
+  }
+
+  /** Odak kipine gir / çık: alt seçenekler kaybolur, sahne tam ekrana büyür. */
+  #setFocus(on) {
+    if (on === this.focus) return;
+    this.focus = on;
+    $('app').classList.toggle('focus', on);
+    this.scene?.setFocus?.(on);
+    if (!on) { this.#renderButton(); }
+  }
+
+  /** Odak kipinin alt çubuğu: ÇEKİL + miktar ya da sonuç. */
+  #renderFocusBar(m) {
+    const s = this.s;
+    const cash = $('fb-cash');
+    const info = $('fb-info');
+    let showCash = false;
+    let text = '';
+    let cls = 'fb-info';
+    if (this.phase === 'flying' && this.inFlight) {
+      showCash = true;
+      $('fb-label').textContent = this.cashing ? 'ÇEKİLİYOR…' : 'ÇEKİL';
+      $('fb-amt').textContent = short(Math.floor(s.my_bet * m));
+    } else if (this.phase === 'betting') {
+      text = s.my_bet > 0 ? `Bahisler kapandı · bahsin ${short(s.my_bet)} uçuşa hazır` : 'Bahisler kapandı · kalkış!';
+      cls += ' wait';
+    } else if (s.my_bet > 0 && s.my_cashout != null) {
+      text = `${fx(s.my_cashout)} · +${short(s.my_payout)} kazandın`;
+      cls += ' win';
+    } else if (this.phase === 'crashed') {
+      text = s.my_bet > 0 ? `PATLADI · −${short(s.my_bet)}` : `PATLADI · ${fx(Number(s.crash_mult) || 1)}`;
+      cls += ' boom';
+    } else {
+      text = `İzliyorsun · ${fmt(s.players)} oyuncu`;
+    }
+    if (cash.hidden === showCash) cash.hidden = !showCash;
+    if (info.textContent !== text) info.textContent = text;
+    if (info.className !== cls) info.className = cls;
   }
 
   // ── Kare döngüsü ──
@@ -813,8 +890,9 @@ class Game {
         $('countdown').hidden = false;
         $('cd-num').textContent = String(Math.ceil(left));
         $('cd-bar').style.strokeDashoffset = String(119.4 * (1 - clamp(left / total, 0, 1)));
-        $('phase-chip').className = 'phase-chip';
-        $('phase-chip').textContent = 'Bahisler açık';
+        const locked = left <= LOCK_SECONDS;
+        $('phase-chip').className = locked ? 'phase-chip fly' : 'phase-chip';
+        $('phase-chip').textContent = locked ? 'Bahisler kapandı · kalkış' : 'Bahisler açık';
         $('mult-v').textContent = '1.00';
         const sec = Math.ceil(left);
         if (sec <= 3 && sec >= 1 && sec !== this.lastTick) { this.lastTick = sec; if (this.ready) Sound.tick(sec === 1); }
@@ -839,6 +917,16 @@ class Game {
         $('phase-chip').textContent = `Patladı · yeni tur ${Math.max(0, Number(s.seconds_left) || 0)} sn`;
         const m = Number(s.crash_mult) || 1;
         this.graph.draw(Math.log(Math.max(1, m)) / (Number(s.growth) || 0.09), m, Number(s.growth) || 0.09, true);
+      }
+      // **Odak kipi**: son 3 saniye + uçuş + patlamanın ilk anı tam ekran.
+      const wantFocus = (this.phase === 'betting' && this.betEndsLocal > 0 && countdown <= LOCK_SECONDS && countdown > 0)
+        || this.phase === 'flying'
+        || (this.phase === 'crashed' && this.crashAtLocal > 0 && Date.now() - this.crashAtLocal < CRASH_HOLD_MS);
+      this.#setFocus(wantFocus);
+      if (this.focus) this.#renderFocusBar(this.liveMult);
+      if (this.phase === 'betting' && this.betLocked && !this.lockShown) {
+        this.lockShown = true;
+        this.#renderButton();
       }
       if (this.scene && !document.hidden) {
         this.scene.frame(dt, { mult: this.phase === 'flying' ? this.liveMult : 1, countdown });

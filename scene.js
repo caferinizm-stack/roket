@@ -389,6 +389,8 @@ export class RocketScene {
     this.countdown = 99;
     this.time = 0;
     this.shake = 0;
+    this.zoom = 0;        // 0 normal · 1 odak (roket yakın plan)
+    this.zoomTarget = 0;
     this.rocketPos = new THREE.Vector3(0, -1.7, 0);
     this.#placeOnPad();
     this.resize();
@@ -425,6 +427,9 @@ export class RocketScene {
     this.fire.mat.uniforms.uScale.value = h * 0.9;
     this.smoke.mat.uniforms.uScale.value = h * 0.9;
   }
+
+  /** Odak kipi: kamera rokete yaklaşır (son 3 sn + uçuş), sonra geri çekilir. */
+  setFocus(on) { this.zoomTarget = on ? 1 : 0; }
 
   /** Yeni tur: roket rampada, gökyüzü baştan. */
   reset() {
@@ -555,6 +560,21 @@ export class RocketScene {
       r.light.intensity = 0;
     }
 
+    // **Ateşleme** (kalkışa son 3 sn): motor yanar, alev büyür, rampa titrer.
+    if (this.mode === 'idle' && countdown <= 3 && countdown > 0) {
+      const ign = 1 - clamp(countdown / 3, 0, 1); // 0 → 1
+      r.flame.visible = true;
+      const fl = 0.25 + ign * 0.75 + Math.random() * 0.2;
+      r.flame.scale.set(0.8 + Math.random() * 0.1, fl, 0.8 + Math.random() * 0.1);
+      r.light.intensity = 6 + ign * 22 + Math.random() * 6;
+      const base = r.group.position;
+      const n = 1 + Math.round(ign * 4);
+      for (let k = 0; k < n; k++) {
+        this.fire.emit(base.x + (Math.random() - 0.5) * 0.15, base.y - 1.05, base.z, (Math.random() - 0.5) * 1.4, -1.5 - Math.random() * 1.5, (Math.random() - 0.5) * 0.6, 0.25 + Math.random() * 0.2, 0.28 + ign * 0.2, 0, 0.6);
+      }
+      this.shake = Math.max(this.shake, 0.12 + ign * 0.25);
+    }
+
     // Patlama sonrası
     if (this.mode === 'boom') {
       this.boomLight.intensity *= Math.exp(-dt * 4);
@@ -597,9 +617,13 @@ export class RocketScene {
     // Kamera: hafif takip + sarsıntı
     this.shake = Math.max(0, this.shake - dt * 1.4);
     const sh = this.shake * 0.12 + (this.mode === 'fly' ? Math.min(0.03, lm * 0.008) : 0);
+    // Odak: kamera yumuşakça rokete yaklaşır (tam ekran yakın plan).
+    this.zoom = lerp(this.zoom, this.zoomTarget, 1 - Math.exp(-dt * 3));
+    const ry = this.rocket.group.visible ? this.rocket.group.position.y : -0.2;
     this.camera.position.x = (Math.random() - 0.5) * sh;
-    this.camera.position.y = 0.6 + (Math.random() - 0.5) * sh;
-    this.camera.lookAt(0, -0.2, 0);
+    this.camera.position.y = lerp(0.6, ry + 0.9, this.zoom * 0.6) + (Math.random() - 0.5) * sh;
+    this.camera.position.z = 10 - this.zoom * 3.4;
+    this.camera.lookAt(0, lerp(-0.2, ry + 0.2, this.zoom * 0.7), 0);
 
     this.skyU.uAlt.value = this.alt;
     this.skyU.uTime.value = this.time;

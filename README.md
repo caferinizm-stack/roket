@@ -34,6 +34,13 @@ Yerelde: `python3 -m http.server` → `http://127.0.0.1:8000/?demo=1`.
   Çekilenler sahnede akış balonu olarak görünür.
 * Son 20 tur şeridi, dokununca son 40 tur + istatistik.
 * Otomatik çekil (oran hedefi), roket uçarken **sonraki tura bahis** sırası.
+* Bahis 10 – 1.000.000 kristal (çipler 500K ve 1M dahil).
+* **Odak kipi:** kalkışa son 3 saniye kala bahisler kapanır (sunucu da reddeder),
+  alt seçenekler ve oyuncu listesi animasyonla gizlenir, sahne kartı tam
+  dolduracak şekilde büyür, roket ateşlenir ve kamera yakın plana geçer.
+  Üstte bu turdaki oyuncular şerit hâlinde, altta modern **ÇEKİL** düğmesi ve
+  anlık miktar (10K / 10M) görünür. Patlayınca "PATLADI" ya da kazanç gösterilir,
+  ardından sahne küçülür ve bahis seçenekleri geri gelir.
 * Sesler tarayıcıda üretilir (motor, geri sayım, çekilme, patlama).
 
 ## Uygulama köprüsü (`RetraGame`)
