@@ -37,6 +37,8 @@ function short(n) {
   return String(n);
 }
 const fx = (m) => `${(Number(m) || 1).toFixed(2)}x`;
+/** Satır içi gerçek kristal simgesi (emoji yerine). */
+const KR = '<img class="kr" src="./assets/kristal.png" alt="" />';
 const tierOf = (m) => (m >= 10 ? 'mega' : m >= 3 ? 'hi' : m >= 1.6 ? 'mid' : 'low');
 const pillClass = (m) => (m <= 1.0 ? 'c-boom' : `c-${tierOf(m)}`);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -600,7 +602,7 @@ class Game {
     this.scene?.launch();
     Sound.startEngine();
     $('sub').className = 'sub';
-    $('sub').textContent = this.inFlight ? `Bahsin ${fmt(this.s.my_bet)} 💎 uçuyor` : '';
+    $('sub').innerHTML = this.inFlight ? `Bahsin ${fmt(this.s.my_bet)}${KR} uçuyor` : '';
   }
   #onCrash(prev) {
     const s = this.s;
@@ -619,16 +621,26 @@ class Game {
     $('mult-v').textContent = m.toFixed(2);
     if (s.my_bet > 0 && s.my_cashout == null) {
       $('sub').className = 'sub lose';
-      $('sub').textContent = `Patladı · ${fmt(s.my_bet)} 💎 kaybettin`;
+      $('sub').innerHTML = `Patladı · ${fmt(s.my_bet)}${KR} kaybettin`;
       if (this.ready) Sound.lose();
     } else if (s.my_bet > 0 && s.my_cashout != null) {
       $('sub').className = 'sub win';
-      $('sub').textContent = `${fx(s.my_cashout)}'te çekildin · +${fmt(s.my_payout)} 💎`;
+      $('sub').innerHTML = `${fx(s.my_cashout)}'te çekildin · +${fmt(s.my_payout)}${KR}`;
     } else {
       $('sub').className = 'sub';
       $('sub').textContent = `${fx(m)}'te patladı`;
     }
     void prev;
+  }
+
+  /** "Bahis yapıldı": sahnenin ortasında modern bildirim (toplam bahis). */
+  #betPop(total) {
+    const el = $('bet-pop');
+    $('bp-amt').textContent = short(total);
+    el.hidden = false;
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    clearTimeout(this.betPopT);
+    this.betPopT = setTimeout(() => (el.hidden = true), 1500);
   }
 
   #gain(v) {
@@ -649,7 +661,7 @@ class Game {
     if (this.phase === 'betting' && !this.betLocked) return this.#bet(this.amount);
     // Uçuşta / patlamada: sonraki tura sıra
     if (this.queued) { this.queued = 0; this.toast('Sıradaki bahis iptal edildi'); }
-    else { this.queued = this.amount; this.toast(`${fmt(this.amount)} 💎 sonraki tura sıraya alındı`); }
+    else { this.queued = this.amount; this.toast(`${fmt(this.amount)} kristal sonraki tura sıraya alındı`); }
     Sound.click();
     this.#renderButton();
   }
@@ -664,7 +676,7 @@ class Game {
       Sound.bet();
       notifyApp('bet');
       this.apply({ ...this.s, ...s, bets: this.s?.bets, history_long: this.s?.history_long, server_ms: undefined });
-      this.toast(`Bahis +${fmt(amount)} · toplam ${fmt(s.my_bet)} 💎`);
+      this.#betPop(s.my_bet || amount);
       this.poll();
     } catch (e) {
       const t = errorText(e);
@@ -687,7 +699,7 @@ class Game {
       if (s.my_cashout != null) {
         Sound.cash();
         $('sub').className = 'sub win';
-        $('sub').textContent = `${fx(s.my_cashout)}'te çekildin · +${fmt(s.my_payout)} 💎`;
+        $('sub').innerHTML = `${fx(s.my_cashout)}'te çekildin · +${fmt(s.my_payout)}${KR}`;
         this.#feed({ name: 'Sen', avatar: '', cashout: s.my_cashout, payout: s.my_payout });
         notifyApp(`win:${Math.round(Number(s.my_payout) || 0)}`);
       }
@@ -711,37 +723,37 @@ class Game {
     if (this.phase === 'flying' && this.inFlight) {
       btn.className = 'main-btn cash';
       top.textContent = this.cashing ? 'ÇEKİLİYOR…' : 'ÇEKİL';
-      sub.textContent = `${fmt(s.my_bet * this.liveMult)} 💎`;
+      sub.innerHTML = `${fmt(s.my_bet * this.liveMult)}${KR}`;
       return;
     }
     if (this.phase === 'betting' && this.betLocked && !this.queued) {
       btn.className = 'main-btn queue';
       top.textContent = 'BAHİSLER KAPANDI';
-      sub.textContent = `${fmt(this.amount)} 💎 · sonraki tura al`;
+      sub.innerHTML = `${fmt(this.amount)}${KR} · sonraki tura al`;
       return;
     }
     if (this.phase === 'betting' && !this.betLocked) {
       btn.className = 'main-btn';
-      top.textContent = this.busy ? 'GÖNDERİLİYOR…' : s.my_bet > 0 ? 'BAHİS EKLE' : 'BAHİS YAP';
-      sub.textContent = `${fmt(this.amount)} 💎`;
+      top.textContent = s.my_bet > 0 ? 'BAHİS EKLE' : 'BAHİS YAP';
+      sub.innerHTML = `${fmt(this.amount)}${KR}`;
       btn.disabled = this.busy;
       return;
     }
     if (this.phase === 'flying' && s.my_cashout != null && !this.queued) {
       btn.className = 'main-btn done';
       top.textContent = `${fx(s.my_cashout)} ÇEKİLDİ`;
-      sub.textContent = `+${fmt(s.my_payout)} 💎 · sıraya al`;
+      sub.innerHTML = `+${fmt(s.my_payout)}${KR} · sıraya al`;
       return;
     }
     if (this.queued) {
       btn.className = 'main-btn cancel';
       top.textContent = 'SIRADA · İPTAL';
-      sub.textContent = `${fmt(this.queued)} 💎 sonraki tur`;
+      sub.innerHTML = `${fmt(this.queued)}${KR} sonraki tur`;
       return;
     }
     btn.className = 'main-btn queue';
     top.textContent = 'SONRAKİ TUR';
-    sub.textContent = `${fmt(this.amount)} 💎`;
+    sub.innerHTML = `${fmt(this.amount)}${KR}`;
   }
 
   #renderMyBet() {
@@ -750,8 +762,8 @@ class Game {
     if (!s || !(s.my_bet > 0)) { el.hidden = true; return; }
     el.hidden = false;
     el.innerHTML = s.my_cashout != null
-      ? `Bahsin <b>${fmt(s.my_bet)}</b> · <b style="color:#8fffc8">${fx(s.my_cashout)}</b>`
-      : `Bahsin <b>${fmt(s.my_bet)}</b> 💎`;
+      ? `Bahsin <b>${fmt(s.my_bet)}</b>${KR} · <b style="color:#8fffc8">${fx(s.my_cashout)}</b>`
+      : `Bahsin <b>${fmt(s.my_bet)}</b>${KR}`;
   }
 
   #renderHistory(list) {
@@ -820,7 +832,7 @@ class Game {
       const rs = won
         ? `<span class="xm">${fx(b.cashout)}</span><small>+${short(b.payout)}</small>`
         : crashed ? '<span style="color:#ff8a9c">💥</span>' : '<span class="dash">—</span>';
-      return `<div class="${cls}">${this.#avatar(b)}<span class="nm">${esc(b.me ? `${b.name} (sen)` : b.name)}</span><span class="bt">${short(b.amount)} 💎</span><span class="rs">${rs}</span></div>`;
+      return `<div class="${cls}">${this.#avatar(b)}<span class="nm">${esc(b.me ? `${b.name} (sen)` : b.name)}</span><span class="bt">${short(b.amount)}${KR}</span><span class="rs">${rs}</span></div>`;
     }).join('');
   }
 
@@ -858,6 +870,7 @@ class Game {
       showCash = true;
       $('fb-label').textContent = this.cashing ? 'ÇEKİLİYOR…' : 'ÇEKİL';
       $('fb-amt').textContent = short(Math.floor(s.my_bet * m));
+      $('fb-mult').textContent = fx(m);
     } else if (this.phase === 'betting') {
       text = s.my_bet > 0 ? `Bahisler kapandı · bahsin ${short(s.my_bet)} uçuşa hazır` : 'Bahisler kapandı · kalkış!';
       cls += ' wait';
@@ -908,7 +921,7 @@ class Game {
         this.graph.draw(this.flightT, m, Number(s.growth) || 0.09, false);
         Sound.engineMult(m);
         if (this.inFlight) {
-          $('mb-sub').textContent = `${fmt(s.my_bet * m)} 💎`;
+          $('mb-sub').innerHTML = `${fmt(s.my_bet * m)}${KR}`;
           if (this.auto && !this.cashing && m >= this.autoAt) this.cashout();
         }
       } else if (this.phase === 'crashed') {
@@ -919,7 +932,9 @@ class Game {
         this.graph.draw(Math.log(Math.max(1, m)) / (Number(s.growth) || 0.09), m, Number(s.growth) || 0.09, true);
       }
       // **Odak kipi**: son 3 saniye + uçuş + patlamanın ilk anı tam ekran.
-      const wantFocus = (this.phase === 'betting' && this.betEndsLocal > 0 && countdown <= LOCK_SECONDS && countdown > 0)
+      // (Geri sayım 0'a inip sunucu "uçuyor" diyene kadar da odak sürer:
+      //  aradaki kısa anda alt menüler geri gelip tekrar kaybolmasın.)
+      const wantFocus = (this.phase === 'betting' && this.betEndsLocal > 0 && countdown <= LOCK_SECONDS)
         || this.phase === 'flying'
         || (this.phase === 'crashed' && this.crashAtLocal > 0 && Date.now() - this.crashAtLocal < CRASH_HOLD_MS);
       this.#setFocus(wantFocus);
